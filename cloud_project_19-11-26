@@ -1,0 +1,306 @@
+# FocusGuard — Engineering Journal 01
+**Project:** FocusGuard — AWS Cloud Governance & Automation  
+**Feature:** FG-001 — AWS Identity Inspector  
+**Date:** 19 November 2026  
+**Technologies:** AWS, IAM Identity Center, AWS CLI, Python, Boto3, Git, GitHub  
+**Status:** First working AWS integration completed
+
+---
+
+## 1. Project Overview
+
+FocusGuard is an AWS Cloud Governance and Automation project being developed as part of my Cloud Engineering and DevOps portfolio.
+
+The project is based on **Focus Group**, a fictional UK-based AI consultancy.
+
+The aim is to develop practical cloud engineering skills by building real automation tools, troubleshooting problems, and improving the solutions.
+
+My approach is simple:
+
+**Build → Break → Fix → Understand → Improve**
+
+Rather than following tutorials and copying code, I want to understand how cloud systems work through hands-on engineering.
+
+### What am I building?
+
+The first feature is called **FG-001 — AWS Identity Inspector**.
+
+This Python tool connects to AWS and identifies:
+
+- The AWS account being accessed.
+- The AWS identity making the request.
+- The IAM role being used.
+
+This is useful because cloud automation needs to know which AWS environment and permissions it is operating under.
+
+---
+
+## 2. Setting Up Secure AWS Access
+
+Before connecting Python to AWS, I needed to configure secure authentication.
+
+I used **AWS IAM Identity Center** instead of creating long-lived IAM access keys.
+
+### My configuration
+
+| Component | Configuration |
+|---|---|
+| AWS Region | eu-west-2 (London) |
+| Authentication | IAM Identity Center (SSO) |
+| Engineering user | focusgroup-engineer |
+| Permission set | FocusGuard-Identity-Inspector |
+| AWS CLI profile | focusguard-dev |
+| SSO session | focusgroup |
+| Operating system | macOS |
+| Programming language | Python |
+
+### Why use IAM Identity Center?
+
+IAM Identity Center allows me to authenticate using a central sign-in process and obtain temporary AWS credentials.
+
+This is preferable to embedding permanent AWS access keys inside Python scripts.
+
+It also supports assigning specific permissions to users through permission sets.
+
+For this project, I configured a limited engineering role rather than relying on root or administrator access.
+
+---
+
+## 3. Configuring the AWS CLI
+
+The next task was configuring the AWS Command Line Interface to authenticate through IAM Identity Center.
+
+I ran:
+
+```bash
+aws configure sso
+```
+
+This command guides the user through configuring an AWS SSO session and a named CLI profile.
+
+After completing the configuration, I checked the available profiles:
+
+```bash
+aws configure list-profiles
+```
+
+Expected profile:
+
+```text
+focusguard-dev
+```
+
+I then authenticated:
+
+```bash
+aws sso login --profile focusguard-dev
+```
+
+The AWS CLI opened a browser authentication flow.
+
+After signing in, I was able to use the configured profile to access AWS.
+
+### Verifying my AWS identity
+
+I ran:
+
+```bash
+aws sts get-caller-identity --profile focusguard-dev
+```
+
+AWS Security Token Service returned information identifying my authenticated AWS account and assumed role.
+
+This confirmed that the CLI was using the intended AWS identity.
+
+---
+
+## 4. Building the Python Identity Inspector
+
+Once AWS authentication was working, I started building the Python application.
+
+The project uses **Boto3**, the AWS SDK for Python.
+
+Boto3 allows Python applications to communicate with AWS services through API requests.
+
+### Python application
+
+File: `src/main.py`
+
+```python
+import boto3
+
+print("FocusGuard — AWS Identity Inspector")
+
+session = boto3.Session(profile_name="focusguard-dev")
+
+sts = session.client("sts")
+
+identity = sts.get_caller_identity()
+
+print("AWS Account:", identity["Account"])
+print("AWS User ID:", identity["UserId"])
+print("AWS Role ARN:", identity["Arn"])
+```
+
+### Understanding the code
+
+| Python code | Explanation |
+|---|---|
+| `import boto3` | Imports the AWS SDK for Python |
+| `boto3.Session()` | Creates a session using AWS configuration and credentials |
+| `profile_name` | Selects the configured AWS CLI profile |
+| `session.client("sts")` | Creates a client for AWS Security Token Service |
+| `get_caller_identity()` | Requests information about the current AWS identity |
+| `identity["Account"]` | Extracts the AWS account ID |
+| `identity["UserId"]` | Extracts the AWS user identifier |
+| `identity["Arn"]` | Extracts the Amazon Resource Name of the caller |
+
+### Running the application
+
+From the FocusGuard project directory, with the Python virtual environment activated:
+
+```bash
+python src/main.py
+```
+
+Example output (identifiers anonymised):
+
+```text
+FocusGuard — AWS Identity Inspector
+
+AWS Account: 123456789012
+AWS User ID: EXAMPLE-USER-ID
+AWS Role ARN: arn:aws:sts::123456789012:assumed-role/EXAMPLE-ROLE/EXAMPLE-SESSION
+```
+
+The application successfully retrieved my AWS identity using Boto3.
+
+**This was my first working Python application communicating directly with AWS.**
+
+---
+
+## 5. Problems Encountered and How I Fixed Them
+
+One of the most valuable parts of this project has been troubleshooting.
+
+### Problem 1 — AWS CLI profile not found
+
+When attempting to authenticate, I received an error similar to:
+
+```text
+The config profile (focusguard-dev) could not be found
+```
+
+**Cause:** The AWS CLI profile had not been configured successfully.
+
+**Solution:** I completed the SSO configuration using:
+
+```bash
+aws configure sso
+```
+
+I then verified that the profile existed:
+
+```bash
+aws configure list-profiles
+```
+
+After that, I successfully authenticated.
+
+**What I learned:** AWS CLI profiles must be configured before they can be used for authentication or API requests.
+
+### Problem 2 — Incorrect SSO configuration input
+
+During the initial configuration, I entered the wrong information at the SSO session-name prompt.
+
+**Solution:** I restarted the configuration and entered the appropriate session name and AWS settings.
+
+**What I learned:** Understanding what a command is asking for is more important than rushing through configuration.
+
+### Problem 3 — Python output was difficult to read
+
+Initially, my Python application displayed the complete Boto3 API response.
+
+Although the request worked, the output contained unnecessary metadata.
+
+**Solution:** I improved the application by selecting individual values from the returned Python dictionary.
+
+For example:
+
+```python
+print("AWS Account:", identity["Account"])
+```
+
+**What I learned:** A working application is not necessarily a well-presented application. Output should be readable and useful to the person running the tool.
+
+---
+
+## 6. Security Considerations
+
+Security is an important part of this project.
+
+The current implementation follows several basic principles:
+
+- **Temporary credentials:** IAM Identity Center is used instead of hard-coded access keys.
+- **Least privilege:** The engineering permission set is intended for a limited identity-inspection task.
+- **Identity verification:** AWS STS confirms which identity is executing requests.
+- **Read-only operation:** The current Python application retrieves information without modifying AWS resources.
+- **No secrets in source code:** The script does not contain passwords or AWS access keys.
+
+Future improvements will include more robust configuration handling, testing, and error management.
+
+---
+
+## 7. Skills Developed
+
+This stage of FocusGuard helped me gain practical experience in:
+
+| Technology | Practical experience |
+|---|---|
+| AWS IAM Identity Center | Configuring secure AWS authentication |
+| AWS CLI | Managing profiles and making AWS API requests |
+| AWS STS | Identifying authenticated AWS users and roles |
+| Python | Writing and executing an AWS automation script |
+| Boto3 | Connecting Python applications to AWS |
+| Python dictionaries | Extracting values from AWS API responses |
+| Terminal | Running commands and troubleshooting errors |
+| Git and GitHub | Documenting and publishing engineering progress |
+
+---
+
+## 8. Current Project Status
+
+**Completed:**
+
+- Configured IAM Identity Center access.
+- Created and verified an AWS CLI profile.
+- Authenticated successfully using AWS SSO.
+- Verified the AWS identity using the CLI.
+- Connected Python to AWS using Boto3.
+- Retrieved and displayed AWS identity information.
+- Improved the application's output.
+- Documented the engineering work.
+
+**Next engineering task:**
+
+Implement Python exception handling.
+
+I will deliberately configure an invalid AWS profile, observe the resulting exception, and improve the application so that it provides a clear error message instead of an unhandled traceback.
+
+This will introduce practical debugging and error handling.
+
+---
+
+## 9. Final Reflection
+
+This milestone was about more than writing a small Python script.
+
+I learned how AWS authentication works, how Python communicates with AWS services, and why troubleshooting is an essential part of cloud engineering.
+
+The biggest takeaway is that **understanding why something fails is just as valuable as getting it to work**.
+
+FocusGuard will continue to evolve from a simple identity-inspection script into a more capable AWS governance and automation tool.
+
+---
+
+*This journal documents practical progress in my AWS Cloud Engineering, DevOps, and Automation portfolio.*
